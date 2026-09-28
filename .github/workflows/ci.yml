@@ -19,11 +19,11 @@ jobs:
           python-version: '3.14'
           cache: pip
 
-      - name: 校验运行环境
-        run: python -c "import tkinter, flask, pyautogui, PIL, qrcode"
-
       - name: 安装依赖
         run: python -m pip install -r requirements.txt
+
+      - name: 校验运行环境
+        run: python -c "import tkinter, flask, pyautogui, PIL, qrcode, pystray"
 
       - name: 跑测试
         run: python -m unittest discover -s tests -v

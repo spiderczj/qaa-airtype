@@ -12,8 +12,9 @@
 - **文字直出**：手机上敲的内容通过 `Cmd+V` 粘贴到电脑当前焦点窗口
 - **三套主题**：`auto`（智能输入）/ `detect` / `light`
 - **访问令牌鉴权**：二维码 URL 里带一次性令牌，没有令牌一律 `403`，别人扫到旧链接也进不来
+- **自动跟随网卡**：切 Wi-Fi / 插网线 / 开关 VPN 后自动刷新地址与二维码，必要时自动换绑
+- **`/type` 有保护**：单次文本长度上限 + 每秒请求数上限，超限返回 `413` / `429`
 - **系统托盘 / 剪贴板回退**：粘贴失败时自动改走剪贴板
-- **两种连接方式**：同一局域网直连；跨网络时可切 Cloudflare 中转模式
 
 ---
 
@@ -59,12 +60,15 @@ Ubuntu 上把第 1 步换成 `sudo apt install python3-tk`。
 
 ## 日常使用
 
-1. 应用里选好 **连接模式**（通常就是你的局域网 IP）、**端口**（默认 `5000`）、**主题**
+1. 应用里选好 **连接模式**（默认选中第一个真实网卡 IP，需要全网段可手动选 `0.0.0.0`）、**端口**（默认 `8765`）、**主题**
 2. 点 **启动服务**
 3. 用手机扫码，或把「可用地址」里的链接发到手机上打开
 4. 在手机页面里打字 → 电脑上即刻粘贴
 
 停止服务：点应用里的停止按钮，或直接退出应用。
+
+> 中途换了 Wi-Fi？应用每 3 秒检查一次网卡，地址列表和二维码会自动刷新；
+> 如果服务绑的是具体 IP 且该 IP 已消失，它会自动换绑到新 IP 并提示你重新扫码。
 
 ---
 
@@ -94,8 +98,19 @@ theme/light.html   浅色
 
 | 文件 | 说明 |
 |---|---|
-| `dist/QAA AirType.app` | 约 60M，可直接双击运行 |
-| `dist/QAA-AirType.dmg` | 约 28M，含 `/Applications` 软链，拖拽安装 |
+| `dist/QAA AirType.app` | 约 48M，可直接双击运行 |
+| `dist/QAA-AirType.dmg` | 约 24M，含 `/Applications` 软链，拖拽安装 |
+
+> 没有 `.venv` 的机器（比如 CI）也能直接跑 `./build.sh`，它会退回用 PATH 里的 `python3` / `pyinstaller`。
+
+### 持续集成
+
+`.github/workflows/ci.yml` 会在每次 push / PR 时跑测试；打 `v*` 标签时自动执行 `build.sh`
+并把 DMG 上传到该版本的 Release：
+
+```bash
+git tag v1.1.0 && git push origin v1.1.0
+```
 
 ---
 
@@ -105,24 +120,35 @@ theme/light.html   浅色
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-19 条用例，覆盖访问令牌鉴权、Cookie 鉴权、主题加载、路径穿越防护、资源落位、IP 枚举、版本号一致性。
+28 条用例，覆盖访问令牌鉴权、Cookie 鉴权、主题加载、路径穿越防护、资源落位、IP 枚举、
+`/type` 的长度与频率保护、默认端口、版本号一致性。
 
 测试目标会自动选择：**存在 `dist/QAA AirType.app` 就验证打包产物**（走 `sys._MEIPASS` 资源路径），否则验证源码目录。
 
-> `/type` 的「成功路径」故意不测 —— 它会真实触发一次 `Cmd+V`，粘贴到你当时焦点所在的窗口上。
+> 测试开头会设 `QAA_DRY_RUN=1`，`/type` 的成功路径因此可以放心自动断言 ——
+> 它会跳过真实的剪贴板与 `Cmd+V`，不会把字打进你当时的窗口。
 
 ---
 
 ## 项目结构
 
 ```
-src/remote_server.py    主程序（GUI + Flask 服务 + 平台适配）
-src/bootstrap.py        打包后的日志重定向与崩溃兜底
+src/remote_server.py    入口：组装各模块、启动诊断、拉起 GUI（也是打包入口）
+src/settings.py         版本号与共用常量（__version__ 的唯一定义处）
+src/server.py           Flask 服务：令牌鉴权、主题下发、/type 接口与限流
+src/gui.py              Tk 图形界面（连接模式、二维码、启停、网卡跟随）
+src/platform_paste.py   平台适配：辅助功能授权检测、跨平台粘贴动作
+src/themes.py           主题加载与文件名消毒（防路径穿越）
+src/paths.py            资源搜索路径（开发 / 打包两套布局）
+src/netinfo.py          局域网 IP 枚举（不碰 DNS/mDNS，避免卡死）
+src/appconfig.py        config.json 读写
+src/bootstrap.py        打包后的日志重定向、轮转与崩溃兜底
 src/generate_icon.py    生成 icon.png / icon.ico / icon.icns
 src/default.html        默认手机页面
 theme/                  手机页面主题
 assets/                 图标资源
 tests/                  接口与资源测试
+.github/workflows/      CI：push/PR 跑测试，打 tag 自动打包发 Release
 QAA-AirType.spec        PyInstaller 打包配置
 build.sh                一键打包
 run.sh                  开发环境启动脚本
@@ -134,13 +160,13 @@ run.sh                  开发环境启动脚本
 
 ## 版本号
 
-**只定义一处**：`src/remote_server.py` 顶部的 `__version__`。
+**只定义一处**：`src/settings.py` 里的 `__version__`。
 
 ```python
 __version__ = '1.0.0'
 ```
 
-`QAA-AirType.spec` 用正则从这里读取（避免执行业务代码），GUI 标题栏和启动诊断日志都会显示它。发版时只改这一行。
+`QAA-AirType.spec` 用正则从这个文件读取（避免执行业务代码），GUI 标题栏和启动诊断日志都会显示它。发版时只改这一行。
 
 ---
 
@@ -150,7 +176,11 @@ __version__ = '1.0.0'
 检查电脑和手机是否在同一个 Wi-Fi；看应用里的「可用地址」是否列出了正确的局域网 IP。
 
 **端口被占用**
-默认 `5000`。macOS 开了「AirPlay 接收器」会占用这个端口，换成别的端口即可，应用会在启动前预检并提示。
+默认 `8765`（故意避开 macOS「AirPlay 接收器」常年占用的 `5000`）。启动前会预检端口，占用时会直接提示你换一个。
+
+**换了网络就连不上**
+应用每 3 秒刷新一次地址列表；如果服务绑的是具体 IP 且该 IP 已经没了，它会自动换绑并提示重新扫码。
+实在不行点一次停止再启动。
 
 **打出来的字没粘贴到**
 九成是没授权「辅助功能」，按上面的步骤重新授权。

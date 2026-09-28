@@ -22,6 +22,10 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_DIR = os.path.join(PROJECT_ROOT, 'src')
 BUNDLE_CONTENTS = os.path.join(PROJECT_ROOT, 'dist', 'QAA AirType.app', 'Contents')
 
+# 必须在导入 remote_server 之前设置：QAA_DRY_RUN 会让 /type 跳过真实的
+# 剪贴板与 Cmd+V 动作，否则「发送成功」用例会把字打进当前焦点窗口。
+os.environ.setdefault('QAA_DRY_RUN', '1')
+
 # 必须在导入 remote_server 之前把源码目录加进搜索路径
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
@@ -124,6 +128,71 @@ class TestTheme(Base):
                                  resp.get_data(as_text=True), self.target())
 
 
+class TestTypeProtection(Base):
+    """/type 的长度与频率保护，以及 DRY_RUN 下的成功路径"""
+
+    def setUp(self):
+        rs.reset_type_rate_limit()
+
+    def tearDown(self):
+        rs.reset_type_rate_limit()
+
+    def test_dry_run_is_enabled_in_tests(self):
+        # 没有这个前提，下面的成功用例会把文字打进你当前的窗口
+        self.assertTrue(rs.DRY_RUN, self.target())
+
+    def test_type_success_path_returns_200(self):
+        resp = self.client().post(f'/type?t={self.token}', json={'text': '你好'})
+        self.assertEqual(resp.status_code, 200, self.target())
+        self.assertTrue(resp.get_json()['success'], self.target())
+
+    def test_type_success_path_via_cookie(self):
+        c = self.client()
+        c.set_cookie('qaa_tok', self.token, domain='localhost')
+        resp = c.post('/type', json={'text': 'cookie 路径'})
+        self.assertEqual(resp.status_code, 200, self.target())
+        self.assertTrue(resp.get_json()['success'], self.target())
+
+    def test_type_rejects_oversized_text(self):
+        resp = self.client().post(f'/type?t={self.token}',
+                                  json={'text': 'x' * (rs.MAX_TYPE_CHARS + 1)})
+        self.assertEqual(resp.status_code, 413, self.target())
+        self.assertFalse(resp.get_json()['success'], self.target())
+
+    def test_type_rejects_non_string_text(self):
+        resp = self.client().post(f'/type?t={self.token}', json={'text': 123})
+        self.assertEqual(resp.status_code, 400, self.target())
+
+    def test_type_rate_limits_burst(self):
+        c = self.client()
+        statuses = [c.post(f'/type?t={self.token}', json={'text': f'msg {i}'}).status_code
+                    for i in range(rs.TYPE_RATE_LIMIT + 3)]
+        allowed = rs.TYPE_RATE_LIMIT
+        self.assertEqual(statuses[:allowed], [200] * allowed,
+                         f'{self.target()} 前 {allowed} 次应放行: {statuses}')
+        self.assertTrue(all(s == 429 for s in statuses[allowed:]),
+                        f'{self.target()} 超限应全部 429: {statuses}')
+
+    def test_unauthorized_does_not_consume_quota(self):
+        # 未授权请求不该吃掉正常使用的限流额度
+        for _ in range(rs.TYPE_RATE_LIMIT + 3):
+            self.assertEqual(self.client().post('/type', json={'text': 'x'}).status_code, 403)
+        resp = self.client().post(f'/type?t={self.token}', json={'text': '还有额度'})
+        self.assertEqual(resp.status_code, 200, self.target())
+
+
+class TestRuntimeDefaults(Base):
+    """默认端口不能是 5000 —— 会被 macOS「AirPlay 接收器」占用"""
+
+    def test_default_port_avoids_airplay(self):
+        self.assertEqual(rs.DEFAULT_PORT, 8765, self.target())
+        self.assertNotEqual(rs.DEFAULT_PORT, 5000, self.target())
+
+    def test_rate_and_length_limits_are_configured(self):
+        self.assertGreater(rs.TYPE_RATE_LIMIT, 0)
+        self.assertGreater(rs.MAX_TYPE_CHARS, 0)
+
+
 class TestResources(Base):
     """资源落位：打包最容易漏的就是这一步。"""
 
@@ -173,7 +242,7 @@ class TestIPEnumeration(Base):
 
 
 class TestVersion(unittest.TestCase):
-    """版本号只定义一处，spec 与运行时必须读到同一个值。"""
+    """版本号只定义一处，spec 与运行时必须读到同一个值"""
 
     def test_version_format(self):
         self.assertRegex(rs.__version__, r'^\d+\.\d+\.\d+$')
@@ -183,13 +252,14 @@ class TestVersion(unittest.TestCase):
         with open(path, encoding='utf-8') as fh:
             spec = fh.read()
         self.assertNotRegex(spec, r"^VERSION\s*=\s*['\"]",
-                            'spec 不应硬编码 VERSION，应从 src/remote_server.py 读取')
-        src = os.path.join(SRC_DIR, 'remote_server.py')
-        with open(src, encoding='utf-8') as fh:
+                            'spec 不应硬编码 VERSION，应从 src/settings.py 读取')
+        settings = os.path.join(SRC_DIR, 'settings.py')
+        with open(settings, encoding='utf-8') as fh:
             found = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]",
                               fh.read(), re.M)
         self.assertIsNotNone(found)
         self.assertEqual(found.group(1), rs.__version__)
+
 
 
 if __name__ == '__main__':

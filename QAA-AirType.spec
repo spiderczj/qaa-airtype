@@ -8,9 +8,10 @@ QAA AirType 打包配置（PyInstaller）
 关键点：
   - datas 必须把 default.html / theme/*.html / icon.* 打进去，
     否则 load_theme() 和 get_icon_path() 在打包后找不到文件。
-  - websockets 与 pystray 依赖各自的 hook（lazy import），由 PyInstaller 自动收集。
+  - pystray 的后端是 lazy import，由 PyInstaller 的 hook 自动收集。
   - 无 Apple 开发者证书 → ad-hoc 签名，每次重建后需重新授予「辅助功能」权限。
 """
+
 import glob
 import os
 import re
@@ -24,12 +25,12 @@ BUNDLE_ID = 'com.qaa.airtype'
 
 
 def _read_version() -> str:
-    """版本号的唯一来源是 src/remote_server.py 里的 __version__。
+    """版本号的唯一来源是 src/settings.py 里的 __version__。
 
     这里用文本正则读取而不是 import，避免执行业务代码（它会连带启动
     setup_log、创建 Flask app 等），也就不怕 spec 跑在没有依赖的环境里。
     """
-    path = os.path.join(SRC, 'remote_server.py')
+    path = os.path.join(SRC, 'settings.py')
     with open(path, encoding='utf-8') as fh:
         found = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", fh.read(), re.M)
     if not found:
@@ -55,7 +56,6 @@ datas += [
 hiddenimports = [
     'qrcode.image.pil',   # qrcode 在函数体内按需 import
     'PIL.ImageTk',        # QR 码显示用
-    'websockets.asyncio.client',  # websockets.connect 的真实指向
 ]
 
 # 只保留 macOS 用得到的后端，减少构建噪音和体积

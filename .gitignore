@@ -16,6 +16,7 @@ build/
 # --- 运行时 ---
 qaa.log
 *.log
+*.log.*
 
 # --- 图标中间产物 ---
 # iconutil 的输入目录，generate_icon.py 每次会重建

@@ -14,15 +14,26 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-PYTHON=".venv/bin/python"
-PYINSTALLER=".venv/bin/pyinstaller"
+if [ -x ".venv/bin/python" ]; then
+    # 本地开发：固定用虚拟环境里的解释器
+    PYTHON=".venv/bin/python"
+    PYINSTALLER=".venv/bin/pyinstaller"
+else
+    # CI / 没建 .venv 的机器：用 PATH 里的解释器
+    PYTHON="python3"
+    PYINSTALLER="pyinstaller"
+fi
 APP_NAME="QAA AirType"
 BUNDLE="dist/${APP_NAME}.app"
 DMG="dist/QAA-AirType.dmg"
 ONEDIR="dist/${APP_NAME}"
 
-if [ ! -x "$PYTHON" ] || [ ! -x "$PYINSTALLER" ]; then
-    echo "错误：找不到 .venv，请先创建虚拟环境并安装依赖" >&2
+if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "错误：找不到 Python（$PYTHON），请先安装或创建 .venv" >&2
+    exit 1
+fi
+if ! command -v "$PYINSTALLER" >/dev/null 2>&1; then
+    echo "错误：找不到 pyinstaller，请先执行 pip install -r requirements.txt" >&2
     exit 1
 fi
 

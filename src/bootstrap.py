@@ -27,6 +27,23 @@ def log_path() -> str:
     return os.path.join(config_dir(), 'qaa.log')
 
 
+# 超过该大小就在下次启动时轮转成 qaa.log.1，避免日志无限增长
+LOG_MAX_BYTES = 5 * 1024 * 1024
+
+
+def _rotate_if_needed(path: str) -> None:
+    """日志过大时轮转：qaa.log → qaa.log.1（覆盖旧备份）"""
+    try:
+        if not os.path.exists(path) or os.path.getsize(path) < LOG_MAX_BYTES:
+            return
+        backup = path + '.1'
+        if os.path.exists(backup):
+            os.remove(backup)
+        os.rename(path, backup)
+    except OSError:
+        pass   # 轮转失败不该影响启动
+
+
 def is_frozen() -> bool:
     return bool(getattr(sys, 'frozen', False))
 
@@ -36,6 +53,7 @@ def setup_log() -> bool:
     if not is_frozen():
         return False
     try:
+        _rotate_if_needed(log_path())
         stamp = time.strftime('%a %b %d %H:%M:%S %Y')
         handle = open(log_path(), 'a', encoding='utf-8', buffering=1, errors='replace')
         handle.write(f"=== launch {stamp} ===\n")

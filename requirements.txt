@@ -8,8 +8,6 @@ pyautogui==0.9.54
 pyperclip==1.11.0
 pystray==0.19.5
 qrcode==8.2
-websockets==17.1
-cryptography==50.0.1
 pillow==12.3.0
 
 # ---------- 打包依赖（跑 build.sh 才需要） ----------

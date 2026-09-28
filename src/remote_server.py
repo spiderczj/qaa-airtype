@@ -4,6 +4,10 @@
 from bootstrap import setup_log, crash_guard, is_frozen, log_path
 setup_log()
 
+# 单一版本号来源：QAA-AirType.spec 和启动诊断日志都从这里读取。
+# 发版时只需改这一行。
+__version__ = '1.0.0'
+
 import socket
 import threading
 import tkinter as tk
@@ -667,7 +671,7 @@ def get_all_ips(timeout: float = 3.0):
 class ServerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("QAA AirType")
+        self.root.title(f"QAA AirType {__version__}")
         # 增加高度以容纳二维码
         self.root.geometry("512x640")
         self.root.resizable(True, True)
@@ -1216,6 +1220,7 @@ def log_startup_diagnostics():
         append("--- diagnostics begin ---\n")
         sample = load_theme('auto')
         info = [
+            f"version       = {__version__}",
             f"python        = {sys.version.split()[0]}",
             f"executable    = {sys.executable}",
             f"_MEIPASS      = {getattr(sys, '_MEIPASS', '(n/a)')}",

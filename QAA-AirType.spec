@@ -13,6 +13,7 @@ QAA AirType 打包配置（PyInstaller）
 """
 import glob
 import os
+import re
 
 PROJECT = os.path.abspath(SPECPATH)
 SRC = os.path.join(PROJECT, 'src')
@@ -20,7 +21,23 @@ ASSETS = os.path.join(PROJECT, 'assets')
 
 APP_NAME = 'QAA AirType'
 BUNDLE_ID = 'com.qaa.airtype'
-VERSION = '1.0.0'
+
+
+def _read_version() -> str:
+    """版本号的唯一来源是 src/remote_server.py 里的 __version__。
+
+    这里用文本正则读取而不是 import，避免执行业务代码（它会连带启动
+    setup_log、创建 Flask app 等），也就不怕 spec 跑在没有依赖的环境里。
+    """
+    path = os.path.join(SRC, 'remote_server.py')
+    with open(path, encoding='utf-8') as fh:
+        found = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", fh.read(), re.M)
+    if not found:
+        raise RuntimeError(f'未能在 {path} 中找到 __version__ 定义')
+    return found.group(1)
+
+
+VERSION = _read_version()
 
 # --- 打包进去的资源文件：(源路径, 包内目标目录) ---
 datas = [

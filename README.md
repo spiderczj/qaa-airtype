@@ -99,7 +99,7 @@ theme/light.html   浅色
 | 文件 | 说明 |
 |---|---|
 | `dist/QAA AirType.app` | 约 48M，可直接双击运行 |
-| `dist/QAA-AirType.dmg` | 约 24M，含 `/Applications` 软链，拖拽安装 |
+| `dist/QAA-AirType.dmg` | 约 25M，含 `/Applications` 软链，拖拽安装 |
 
 > 没有 `.venv` 的机器（比如 CI）也能直接跑 `./build.sh`，它会退回用 PATH 里的 `python3` / `pyinstaller`。
 

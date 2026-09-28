@@ -1,0 +1,28 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 虚拟环境（约 106M，每个人机器上都要自己装）
+.venv/
+venv/
+env/
+
+# --- 打包产物 ---
+# PyInstaller 输出，由 build.sh 随时重新生成（约 88M）
+dist/
+build/
+
+# --- 运行时 ---
+qaa.log
+*.log
+
+# --- 图标中间产物 ---
+# iconutil 的输入目录，generate_icon.py 每次会重建
+assets/icon.iconset/
+
+# --- 系统 ---
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
